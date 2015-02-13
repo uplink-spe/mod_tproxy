@@ -1,0 +1,87 @@
+#!/bin/bash
+
+PATH=$PATH:/bin:/usr/bin:/usr/sbin:/sbin:/usr/local/sbin
+
+error() {
+  echo "! Error: $@"
+  exit 1
+}
+
+
+get_lib_dir() {
+  test -s "$1" && LIB=`sed -n 's/.*_LIB_DIR "\(.*\)"/\1/p' "$1"`
+  if [ "$LIB" ]; then
+    IPTLIB=$LIB
+    echo "$IPTLIB (from sources)"
+    return 0
+  fi
+  return 1
+}
+
+get_lib_from_bin() {
+  LIB=`strings $IPTBIN | grep ^/.*lib.*tables`
+  if [ "$LIB" ]; then
+    IPTLIB=$LIB
+    echo "$IPTLIB (from binary)"
+    return 0
+  fi
+  return 1
+}
+
+get_lib_from_lib() {
+  XLIB=`/usr/bin/ldd $IPTBIN | grep libxtables | sed -n 's!.* \(/[^ ]\+\).*!\1!p'`
+  test "$XLIB" || return 1
+  LIB=`strings $XLIB | grep ^/.*lib.*tables`
+  if [ "$LIB" ]; then
+    IPTLIB=$LIB
+    echo "$IPTLIB (from library)"
+    return 0
+  fi
+  return 1
+}
+
+try_dir() {
+  if [ -d "$1/include" ]; then
+    echo "Found iptables sources at $1"
+    IPTSRC=$1
+    return 0
+  fi
+  return 1
+}
+
+try_dirg() {
+  try_dir "$1" && return 0
+  try_dir "$1.git" && return 0
+}
+
+show_help() {
+  echo "Possible options:"
+  exit 0
+}
+
+for ac_option
+do
+  case "$ac_option" in
+    -*=*) ac_optarg=`echo "$ac_option" | sed 's/[-_a-zA-Z0-9]*=//'` ;;
+    *) ac_optarg= ;;
+  esac
+
+  case "$ac_option" in
+    --help) show_help ;;
+    -*) echo Invalid option: $ac_option; exit 1 ;;
+#    *) ni="$ni $ac_option" ;;
+  esac
+done
+
+KVERSION=`uname -r`
+echo Kernel version: $KVERSION
+
+
+
+REPLACE="s!@KVERSION@!$KVERSION!;"
+
+echo -n "Creating Makefile.. "
+sed "$REPLACE" Makefile.in > Makefile
+echo done.
+echo -ne "\nNow run: 'make' and (if everything is fine) 'make install'\n"
+echo
