@@ -10,19 +10,19 @@ Installation
 ------------
 
 Before compiling this module, you need to :
-	1. obtain a USPE.Module.symvers file from your Uplink SPE distribution. Make sure you have same Uplink SPE version AND Linux kernel version.
-	2. copy obtained USPE.Module.symvers into mod_tproxy folder
-	3. run `./configure` to create Makefile
-	4. run `make` to build plugin kernel module
-	5. run `make install` to install kernel module
-	6. run `depmod -a`
-	7. now you can load module using `modprobe 
+1. obtain a USPE.Module.symvers file from your Uplink SPE distribution. Make sure you have same Uplink SPE version AND Linux kernel version.
+2. copy obtained USPE.Module.symvers into mod_tproxy folder
+3. run `./configure` to create Makefile
+4. run `make` to build plugin kernel module
+5. run `make install` to install kernel module
+6. run `depmod -a`
+7. now you can load module using `modprobe 
 
 Also, to make this plugin work with uspe-client tool, you would need to compile user-space libs, located in lib directory.
-	1. Change into directory ./lib
-	2. run `autoreconf -i`
-	3. run `./configure`
-	4. run `make`
-	5. run `make install`
-	6. done!
+1. Change into directory ./lib
+2. run `autoreconf -i`
+3. run `./configure`
+4. run `make`
+5. run `make install`
+6. done!
 
