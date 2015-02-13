@@ -1,0 +1,22 @@
+MODULE_NAME = ebt_USPE_tproxy
+
+KVERSION = @KVERSION@
+KDIR = /lib/modules/$(KVERSION)/build
+EXTRA_CFLAGS += -I$(PWD)/include/ -I$(PWD)/../include/
+
+obj-m = $(MODULE_NAME).o
+
+MY_BUILDDIR = .build
+KBUILD_EXTRA_SYMBOLS = $(PWD)/USPE.Module.symvers
+
+all:
+	@$(MAKE) -C $(KDIR) M=$(PWD) modules
+	@strip --strip-unneeded $(MODULE_NAME).ko
+
+install:
+	$(MAKE) -C $(KDIR) M=$(PWD) modules_install
+clean:
+	$(MAKE) -C $(KDIR) M=$(PWD) clean
+	@rm -Rf $(MY_BUILDDIR)
+
+

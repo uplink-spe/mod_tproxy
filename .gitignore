@@ -1,0 +1,9 @@
+.ebt_USPE_tproxy.ko.cmd
+.ebt_USPE_tproxy.mod.o.cmd
+.ebt_USPE_tproxy.o.cmd
+.tmp_versions/
+Module.symvers
+USPE.Module.symvers
+ebt_USPE_tproxy.ko
+ebt_USPE_tproxy.mod.c
+modules.order
