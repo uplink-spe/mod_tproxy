@@ -200,7 +200,11 @@ static int uspe_tproxy_match(struct sk_buff *skb){
 		(sk->sk_state == TCP_TIME_WAIT && inet_twsk(sk)->tw_transparent)
 	);
 
-	if (sk) sock_gen_put(sk);
+	if (sk->sk_state != TCP_TIME_WAIT) {
+		inet_twsk_put(inet_twsk(sk));
+	} else {
+		sock_gen_put(sk);
+	}
 
 	return transparent;
 }
