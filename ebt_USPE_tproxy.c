@@ -10,6 +10,7 @@
  */
 
 #include <linux/module.h>
+#include <linux/version.h>
 #include <linux/skbuff.h>
 #include <net/udp.h>
 #include <net/tcp.h>
@@ -107,6 +108,7 @@ static int uspe_tproxy_action(struct sk_buff *skb, __be32 ip, __be16 port, __u32
 	const struct iphdr *iph;
 	const struct tcphdr *tcph;
 	struct sock *sk;
+	int ret = -ENOENT;
 
  	iph = ip_hdr(skb);
 	if (!iph || (iph->protocol != IPPROTO_TCP)) return -EFAULT;
@@ -120,9 +122,17 @@ static int uspe_tproxy_action(struct sk_buff *skb, __be32 ip, __be16 port, __u32
 	* connection */
 	sk = inet_lookup_established(dev_net(skb->dev), &tcp_hashinfo,
 		iph->saddr, tcph->source, iph->daddr, tcph->dest, skb->skb_iif);
+	if(!sk){
+		/* no, there's no established connection, check if
+		* there's a listener on the redirected addr/port */
+		sk = inet_lookup_listener(dev_net(skb->dev), &tcp_hashinfo, 
+			iph->saddr, tcph->source, ip, port, skb->skb_iif);
+		//pr_info("tpr: listener is %p", sk);
+	}
 
-	/* UDP has no TCP_TIME_WAIT state, so we never enter here */
-	if (sk && (sk->sk_state == TCP_TIME_WAIT)){
+	if(!sk) return -ENOENT;
+
+	if (sk->sk_state == TCP_TIME_WAIT){
 		// reopening a TIME_WAIT connection needs special handling
 		if (tcph->syn && !tcph->rst && !tcph->ack && !tcph->fin) {
 			struct sock *sk2;
@@ -132,37 +142,41 @@ static int uspe_tproxy_action(struct sk_buff *skb, __be32 ip, __be16 port, __u32
 				iph->saddr, tcph->source, ip, port, skb->skb_iif);
 
 			if (sk2) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,1,0)
 				inet_twsk_deschedule(inet_twsk(sk), &tcp_death_row);
-				inet_twsk_put(inet_twsk(sk));
+#else
+				inet_twsk_deschedule(inet_twsk(sk));
+#endif
+				inet_twsk_put(inet_twsk(sk));	// release original sk
 				sk = sk2;
 			}
+			//pr_info("tpr: matched TW sock, %p", sk2);
 		}
-	} else if(!sk){
-		/* no, there's no established connection, check if
-		* there's a listener on the redirected addr/port */
-		sk = inet_lookup_listener(dev_net(skb->dev), &tcp_hashinfo,iph->saddr, tcph->source, ip, port, skb->skb_iif);
-	}
+	} 
 
 	/* NOTE: assign_sock consumes our sk reference */
-	if (sk && uspe_sk_is_transparent(sk)) {
-		/* This should be in a separate target, but we don't do multiple
-		targets on the same rule yet */
+	if (uspe_sk_is_transparent(sk)) {
 		skb->mark |= fwmark;
 
 		skb_orphan(skb);
 		skb->sk = sk;
 		skb->destructor = sock_edemux;
-		return USPE_PLUGIN_MATCH;
+
+		//pr_info("tpr: set sock");
+		ret =  USPE_PLUGIN_MATCH;
 	}
 
-	return -ENOENT;
+	// need to release socket anyway
+	sock_gen_put(sk);
+
+	return ret;
 }
 
 static int uspe_tproxy_match(struct sk_buff *skb){
 	struct sock *sk;
 	struct tcphdr *tcph;
 	struct iphdr *iph;
-	bool transparent;
+	int transparent;
 
 	iph = ip_hdr(skb);
 	if (!iph || (iph->protocol != IPPROTO_TCP)) return 0;
@@ -182,21 +196,25 @@ static int uspe_tproxy_match(struct sk_buff *skb){
 		(sk->sk_state == TCP_TIME_WAIT && inet_twsk(sk)->tw_transparent)
 	);
 
-	if (sk != skb->sk) sock_gen_put(sk);
+	if (sk) sock_gen_put(sk);
 
-	if (!transparent) return 0;
-	return 1;
+	return transparent;
 }
 
 static bool uspe_sk_is_transparent(struct sock *sk){
-	if (sk->sk_state != TCP_TIME_WAIT) {
-		if (inet_sk(sk)->transparent) return true;
-		sock_put(sk);
-	} else {
-		if (inet_twsk(sk)->tw_transparent) return true;
-		inet_twsk_put(inet_twsk(sk));
-	}
-	return false;
+	if(!sk) return false;
+
+	switch (sk->sk_state) {
+	case TCP_TIME_WAIT:
+ 		if (inet_twsk(sk)->tw_transparent) return true;
+ 		break;
+ 	case TCP_NEW_SYN_RECV:
+ 		if (inet_rsk(inet_reqsk(sk))->no_srccheck) return true;
+		break;
+ 	default:
+ 		if (inet_sk(sk)->transparent) return true;
+ 	}
+ 	return false;
 }
  
 
