@@ -167,7 +167,11 @@ static int uspe_tproxy_action(struct sk_buff *skb, __be32 ip, __be16 port, __u32
 	}
 
 	// need to release socket anyway
-	sock_gen_put(sk);
+	if (sk->sk_state != TCP_TIME_WAIT) {
+		inet_twsk_put(inet_twsk(sk));
+	} else {
+		sock_gen_put(sk);
+	}
 
 	return ret;
 }
